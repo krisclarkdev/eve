@@ -1,0 +1,36 @@
+---
+cdiVersion: 0.5.0
+containerEdits:
+  env:
+    - DISPLAY=:0
+    - WAYLAND_DISPLAY=wayland-0
+devices:
+  - name: rpi.com/vc4-gpu=0
+    containerEdits:
+      deviceNodes:
+        - path: /dev/dri/card0
+        - path: /dev/dri/renderD128
+        - path: /dev/vchiq
+        - path: /dev/vcsm
+        - path: /dev/vcio
+      mounts:
+        - containerPath: /dev/dri
+          hostPath: /dev/dri
+          options:
+            - ro
+        - containerPath: /dev/vchiq
+          hostPath: /dev/vchiq
+          options:
+            - ro
+        - containerPath: /dev/vcsm
+          hostPath: /dev/vcsm
+          options:
+            - ro
+        - containerPath: /dev/vcio
+          hostPath: /dev/vcio
+          options:
+            - ro
+      env:
+        - LIBGL_ALWAYS_SOFTWARE=0
+        - GBM_BACKEND=vc4-drm
+        - EGL_PLATFORM=drm
