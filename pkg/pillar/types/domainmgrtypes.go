@@ -287,9 +287,13 @@ type VmConfig struct {
 	EnableVnc          bool
 	VncDisplay         uint32
 	VncPasswd          string
-	CPUsPinned         bool
-	VMMMaxMem          int // in kbytes
-	EnableVncShimVM    bool
+	// RenderNode specifies the DRM render node for virtio-gpu DRM backend.
+	// When set, the VM's virtio-gpu device will use the host's GPU for rendering.
+	// Example: "/dev/dri/renderD128"
+	RenderNode      string
+	CPUsPinned      bool
+	VMMMaxMem       int // in kbytes
+	EnableVncShimVM bool
 	// Enables enforcement of user-defined ordering for network interfaces.
 	EnforceNetworkInterfaceOrder bool
 	// EnableOemWinLicenseKey indicates the app should receive the embedded Windows license key (if available)

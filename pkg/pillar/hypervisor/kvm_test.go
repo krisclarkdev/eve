@@ -3395,6 +3395,17 @@ func TestCreateDomConfigProcessCoreGuestRAM(t *testing.T) {
 	}
 }
 
+func TestDetectVC4RenderNode(t *testing.T) {
+	// detectVC4RenderNode() checks for /dev/dri/card0 and verifies the driver
+	// is vc4 via /sys/class/drm/card0/device/driver. On systems without vc4
+	// (most x86, non-Raspberry Pi ARM), it returns empty string. On vc4
+	// systems it returns "/dev/dri/renderD128".
+	result := detectVC4RenderNode()
+	if result != "" && result != vc4RenderNode {
+		t.Errorf("detectVC4RenderNode returned unexpected path: %s", result)
+	}
+}
+
 func TestDecideKvmState(t *testing.T) {
 	g := NewGomegaWithT(t)
 	qmpErr := fmt.Errorf("qmp unreachable")
