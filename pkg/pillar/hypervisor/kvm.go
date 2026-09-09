@@ -87,15 +87,22 @@ var (
 
 // detectVC4RenderNode checks if the vc4 GPU is available and returns the
 // appropriate DRM render node path. Returns empty string if vc4 is not available.
-func detectVC4RenderNode() string {
+// cardPath and driverPath are for testing; if empty, defaults are used.
+func detectVC4RenderNode(cardPath, driverPath string) string {
+	if cardPath == "" {
+		cardPath = "/dev/dri/card0"
+	}
+	if driverPath == "" {
+		driverPath = "/sys/class/drm/card0/device/driver"
+	}
+
 	// Check if vc4 DRM device exists
-	if _, err := os.Stat("/dev/dri/card0"); err != nil {
-		logrus.Debugf("vc4 detection failed: /dev/dri/card0 not found: %v", err)
+	if _, err := os.Stat(cardPath); err != nil {
+		logrus.Debugf("vc4 detection failed: %s not found: %v", cardPath, err)
 		return ""
 	}
 
 	// Check if it's a vc4 device by reading the driver name
-	driverPath := "/sys/class/drm/card0/device/driver"
 	link, err := os.Readlink(driverPath)
 	if err != nil {
 		logrus.Debugf("vc4 detection failed: cannot read driver symlink %s: %v", driverPath, err)
@@ -1780,7 +1787,7 @@ func (ctx KvmContext) CreateDomConfig(domainName string,
 
 	// Detect and configure vc4 GPU for virtio-gpu DRM backend on ARM64 (e.g. FR201)
 	if config.RenderNode == "" && ctx.devicemodel == "virt" {
-		if vc4Node := detectVC4RenderNode(); vc4Node != "" {
+		if vc4Node := detectVC4RenderNode("", ""); vc4Node != "" {
 			config.RenderNode = vc4Node
 			logrus.Infof("ARM64 vc4 GPU detected, enabling virtio-gpu DRM backend for domain %s with rendernode %s", domainName, vc4Node)
 		}

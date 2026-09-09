@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -3396,72 +3397,71 @@ func TestCreateDomConfigProcessCoreGuestRAM(t *testing.T) {
 }
 
 func TestDetectVC4RenderNode(t *testing.T) {
-	// detectVC4RenderNode() checks for /dev/dri/card0 and verifies the driver
-	// is vc4 via /sys/class/drm/card0/device/driver. On systems without vc4
-	// (most x86, non-Raspberry Pi ARM), it returns empty string. On vc4
-	// systems it returns "/dev/dri/renderD128".
-	result := detectVC4RenderNode()
-	if result != "" && result != vc4RenderNode {
-		t.Errorf("detectVC4RenderNode returned unexpected path: %s", result)
-	}
-}
-
-func TestDetectVC4RenderNode_NoCard0(t *testing.T) {
-	// Test with non-existent card0 by using os.Stat directly
-	origCard0 := "/dev/dri/card0"
-	if _, err := os.Stat(origCard0); err != nil {
-		// card0 doesn't exist on this system, detection should fail
-		result := detectVC4RenderNode()
-		if result != "" {
-			t.Errorf("detectVC4RenderNode should return empty when card0 missing, got: %s", result)
-		}
-	}
-}
-
-func TestDetectVC4RenderNode_WrongDriver(t *testing.T) {
-	// Test that detection fails when driver is not vc4
-	tempDir := t.TempDir()
-	tempDriver := tempDir + "/driver"
-
-	// Create a driver symlink pointing to something other than vc4
-	if err := os.WriteFile(tempDriver, []byte("/sys/module/i915"), 0644); err != nil {
-		t.Fatalf("failed to create temp driver file: %v", err)
-	}
-
-	// Read the driver to verify it's not vc4
-	driverContent, err := os.ReadFile(tempDriver)
-	if err != nil {
-		t.Fatalf("failed to read driver file: %v", err)
-	}
-	if strings.Contains(string(driverContent), "vc4") {
-		t.Errorf("test setup error: driver should not contain 'vc4'")
+	tests := []struct {
+		name        string
+		cardExists  bool
+		driverLink  string
+		driverErr   bool
+		expectPath  string
+	}{
+		{
+			name:       "vc4 detected",
+			cardExists: true,
+			driverLink: "/sys/module/vc4",
+			expectPath: "/dev/dri/renderD128",
+		},
+		{
+			name:       "card0 missing",
+			cardExists: false,
+			expectPath: "",
+		},
+		{
+			name:       "wrong driver",
+			cardExists: true,
+			driverLink: "/sys/module/i915",
+			expectPath: "",
+		},
+		{
+			name:       "driver readlink fails",
+			cardExists: true,
+			driverErr:  true,
+			expectPath: "",
+		},
 	}
 
-	// Clean up
-	os.Remove(tempDriver)
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			cardPath := filepath.Join(tempDir, "card0")
+			driverPath := filepath.Join(tempDir, "driver")
 
-func TestDetectVC4RenderNode_Vc4Driver(t *testing.T) {
-	// Test that detection succeeds when driver is vc4
-	tempDir := t.TempDir()
-	tempDriver := tempDir + "/driver"
+			if tc.cardExists {
+				if err := os.WriteFile(cardPath, nil, 0644); err != nil {
+					t.Fatalf("failed to create card file: %v", err)
+				}
+			}
 
-	// Create a driver symlink pointing to vc4
-	if err := os.WriteFile(tempDriver, []byte("/sys/module/vc4"), 0644); err != nil {
-		t.Fatalf("failed to create temp driver file: %v", err)
+			if tc.driverErr {
+				// Create a file instead of symlink to force readlink error
+				if err := os.WriteFile(driverPath, nil, 0644); err != nil {
+					t.Fatalf("failed to create driver file: %v", err)
+				}
+			} else if tc.driverLink != "" {
+				target := filepath.Join(tempDir, "target")
+				if err := os.WriteFile(target, nil, 0644); err != nil {
+					t.Fatalf("failed to create target: %v", err)
+				}
+				if err := os.Symlink(target, driverPath); err != nil {
+					t.Fatalf("failed to create driver symlink: %v", err)
+				}
+			}
+
+			result := detectVC4RenderNode(cardPath, driverPath)
+			if result != tc.expectPath {
+				t.Errorf("expected %q, got %q", tc.expectPath, result)
+			}
+		})
 	}
-
-	// Read the driver to verify it's vc4
-	driverContent, err := os.ReadFile(tempDriver)
-	if err != nil {
-		t.Fatalf("failed to read driver file: %v", err)
-	}
-	if !strings.Contains(string(driverContent), "vc4") {
-		t.Errorf("test setup error: driver should contain 'vc4'")
-	}
-
-	// Clean up
-	os.Remove(tempDriver)
 }
 
 func TestCreateDomConfigWithRenderNode(t *testing.T) {
