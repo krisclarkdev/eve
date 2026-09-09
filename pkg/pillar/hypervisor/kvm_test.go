@@ -3406,6 +3406,33 @@ func TestDetectVC4RenderNode(t *testing.T) {
 	}
 }
 
+func TestCreateDomConfigWithRenderNode(t *testing.T) {
+	t.Parallel()
+
+	conf, err := os.CreateTemp("/tmp", "config")
+	if err != nil {
+		t.Errorf("Can't create config file for a domain %v", err)
+	}
+	defer os.Remove(conf.Name())
+
+	diskConfigs, diskStatuses := qemuDisks()
+	config, aa := domainConfigAndAssignableAdapters(diskConfigs)
+	config.RenderNode = "/dev/dri/renderD128"
+	if err := kvmArm.CreateDomConfig(DefaultDomainName, config, types.DomainStatus{},
+		diskStatuses, &aa, nil, swtpmCtrlSock, conf); err != nil {
+		t.Errorf("CreateDomConfig failed %v", err)
+	}
+
+	result, err := os.ReadFile(conf.Name())
+	if err != nil {
+		t.Errorf("reading conf file failed %v", err)
+	}
+
+	if !strings.Contains(string(result), `rendernode = "/dev/dri/renderD128"`) {
+		t.Errorf("QEMU config missing rendernode directive, got:\n%s", string(result))
+	}
+}
+
 func TestDecideKvmState(t *testing.T) {
 	g := NewGomegaWithT(t)
 	qmpErr := fmt.Errorf("qmp unreachable")

@@ -90,18 +90,23 @@ var (
 func detectVC4RenderNode() string {
 	// Check if vc4 DRM device exists
 	if _, err := os.Stat("/dev/dri/card0"); err != nil {
+		logrus.Debugf("vc4 detection failed: /dev/dri/card0 not found: %v", err)
 		return ""
 	}
 
 	// Check if it's a vc4 device by reading the driver name
 	driverPath := "/sys/class/drm/card0/device/driver"
-	if link, err := os.Readlink(driverPath); err == nil {
-		if strings.Contains(link, "vc4") {
-			return vc4RenderNode
-		}
+	link, err := os.Readlink(driverPath)
+	if err != nil {
+		logrus.Debugf("vc4 detection failed: cannot read driver symlink %s: %v", driverPath, err)
+		return ""
+	}
+	if !strings.Contains(link, "vc4") {
+		logrus.Debugf("vc4 detection failed: driver is %s, not vc4", link)
+		return ""
 	}
 
-	return ""
+	return vc4RenderNode
 }
 
 // vtpmRequestResult holds the result of a vTPM request.
