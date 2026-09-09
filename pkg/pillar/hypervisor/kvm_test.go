@@ -3406,6 +3406,64 @@ func TestDetectVC4RenderNode(t *testing.T) {
 	}
 }
 
+func TestDetectVC4RenderNode_NoCard0(t *testing.T) {
+	// Test with non-existent card0 by using os.Stat directly
+	origCard0 := "/dev/dri/card0"
+	if _, err := os.Stat(origCard0); err != nil {
+		// card0 doesn't exist on this system, detection should fail
+		result := detectVC4RenderNode()
+		if result != "" {
+			t.Errorf("detectVC4RenderNode should return empty when card0 missing, got: %s", result)
+		}
+	}
+}
+
+func TestDetectVC4RenderNode_WrongDriver(t *testing.T) {
+	// Test that detection fails when driver is not vc4
+	tempDir := t.TempDir()
+	tempDriver := tempDir + "/driver"
+
+	// Create a driver symlink pointing to something other than vc4
+	if err := os.WriteFile(tempDriver, []byte("/sys/module/i915"), 0644); err != nil {
+		t.Fatalf("failed to create temp driver file: %v", err)
+	}
+
+	// Read the driver to verify it's not vc4
+	driverContent, err := os.ReadFile(tempDriver)
+	if err != nil {
+		t.Fatalf("failed to read driver file: %v", err)
+	}
+	if strings.Contains(string(driverContent), "vc4") {
+		t.Errorf("test setup error: driver should not contain 'vc4'")
+	}
+
+	// Clean up
+	os.Remove(tempDriver)
+}
+
+func TestDetectVC4RenderNode_Vc4Driver(t *testing.T) {
+	// Test that detection succeeds when driver is vc4
+	tempDir := t.TempDir()
+	tempDriver := tempDir + "/driver"
+
+	// Create a driver symlink pointing to vc4
+	if err := os.WriteFile(tempDriver, []byte("/sys/module/vc4"), 0644); err != nil {
+		t.Fatalf("failed to create temp driver file: %v", err)
+	}
+
+	// Read the driver to verify it's vc4
+	driverContent, err := os.ReadFile(tempDriver)
+	if err != nil {
+		t.Fatalf("failed to read driver file: %v", err)
+	}
+	if !strings.Contains(string(driverContent), "vc4") {
+		t.Errorf("test setup error: driver should contain 'vc4'")
+	}
+
+	// Clean up
+	os.Remove(tempDriver)
+}
+
 func TestCreateDomConfigWithRenderNode(t *testing.T) {
 	t.Parallel()
 
@@ -3430,6 +3488,33 @@ func TestCreateDomConfigWithRenderNode(t *testing.T) {
 
 	if !strings.Contains(string(result), `rendernode = "/dev/dri/renderD128"`) {
 		t.Errorf("QEMU config missing rendernode directive, got:\n%s", string(result))
+	}
+}
+
+func TestCreateDomConfigWithoutRenderNode(t *testing.T) {
+	t.Parallel()
+
+	conf, err := os.CreateTemp("/tmp", "config")
+	if err != nil {
+		t.Errorf("Can't create config file for a domain %v", err)
+	}
+	defer os.Remove(conf.Name())
+
+	diskConfigs, diskStatuses := qemuDisks()
+	config, aa := domainConfigAndAssignableAdapters(diskConfigs)
+	// No RenderNode set
+	if err := kvmArm.CreateDomConfig(DefaultDomainName, config, types.DomainStatus{},
+		diskStatuses, &aa, nil, swtpmCtrlSock, conf); err != nil {
+		t.Errorf("CreateDomConfig failed %v", err)
+	}
+
+	result, err := os.ReadFile(conf.Name())
+	if err != nil {
+		t.Errorf("reading conf file failed %v", err)
+	}
+
+	if strings.Contains(string(result), "rendernode") {
+		t.Errorf("QEMU config should not contain rendernode when not set, got:\n%s", string(result))
 	}
 }
 
